@@ -909,7 +909,7 @@ class GymWrapper(GymLikeEnv, metaclass=_AsyncMeta):
 
         return LegacyPixelObservationWrapper(env, pixels_only=pixels_only)
 
-    @implement_for("gymnasium")
+    @implement_for("gymnasium", "0.26.0", "1.0.0")
     def _build_gym_env(self, env, pixels_only):  # noqa: F811
         compatibility = gym_backend("wrappers.compatibility")
         pixel_observation = gym_backend("wrappers.pixel_observation")
@@ -926,6 +926,28 @@ class GymWrapper(GymLikeEnv, metaclass=_AsyncMeta):
         )
         # resetting as 0.26 comes with a very 'nice' OrderEnforcing wrapper
         env = compatibility.EnvCompatibility(env)
+        env.reset()
+        from torchrl.envs.libs.utils import (
+            GymPixelObservationWrapper as LegacyPixelObservationWrapper,
+        )
+
+        return LegacyPixelObservationWrapper(env, pixels_only=pixels_only)
+
+    @implement_for("gymnasium", "1.0.0", None)
+    def _build_gym_env(self, env, pixels_only):  # noqa: F811
+        transform_observation = gym_backend("wrappers.transform_observation")
+
+        if env.render_mode:
+            return transform_observation.AddRenderObservation(
+                env, render_only=pixels_only
+            )
+            
+        warnings.warn(
+            "Environments provided to GymWrapper that need to be wrapped in PixelObservationWrapper "
+            "should be created with `gym.make(env_name, render_mode=mode)` where possible,"
+            'where mode is either "rgb_array" or any other supported mode.'
+        )
+        # resetting as 0.26 comes with a very 'nice' OrderEnforcing wrapper
         env.reset()
         from torchrl.envs.libs.utils import (
             GymPixelObservationWrapper as LegacyPixelObservationWrapper,
