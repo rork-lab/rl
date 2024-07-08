@@ -943,12 +943,14 @@ class GymWrapper(GymLikeEnv, metaclass=_AsyncMeta):
             )
             
         warnings.warn(
-            "Environments provided to GymWrapper that need to be wrapped in PixelObservationWrapper "
+            "Environments provided to GymWrapper that need to be wrapped in AddRenderObservation"
             "should be created with `gym.make(env_name, render_mode=mode)` where possible,"
             'where mode is either "rgb_array" or any other supported mode.'
         )
+        
         # resetting as 0.26 comes with a very 'nice' OrderEnforcing wrapper
         env.reset()
+        
         from torchrl.envs.libs.utils import (
             GymPixelObservationWrapper as LegacyPixelObservationWrapper,
         )
