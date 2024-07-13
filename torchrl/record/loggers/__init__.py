@@ -11,3 +11,5 @@ from .tensorboard import TensorboardLogger
 from .utils import generate_exp_name, get_logger
 
 from .wandb import WandbLogger
+
+from .clearml import ClearMLLogger
