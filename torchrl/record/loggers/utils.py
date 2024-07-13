@@ -63,6 +63,15 @@ def get_logger(
             exp_name=experiment_name,
             **mlflow_kwargs,
         )
+    elif logger_type == "clearml":
+        from torchrl.record.loggers.clearml import ClearMLLogger
+
+        clearml_kwargs = kwargs.get("clearml_kwargs", {})
+        logger = ClearMLLogger(
+            project_name=logger_name,
+            task_name=experiment_name,
+            **clearml_kwargs
+        )
     elif logger_type in ("", None):
         return None
     else:
