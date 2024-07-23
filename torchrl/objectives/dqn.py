@@ -560,7 +560,9 @@ class DistributionalDQNLoss(LossModule):
             support = support.to("cpu")
             pns_a = pns_a.to("cpu")
 
-            Tz = reward + (1 - terminated.to(reward.dtype)) * discount * support
+            # Distributional DQN RuntimeError: The size of tensor a (32) must match the size of tensor b (51) at non-singleton dimension 1
+            # Tz = reward + (1 - terminated.to(reward.dtype)) * discount * support
+            Tz = reward + (1 - terminated.to(reward.dtype)) * discount.unsqueeze(-1) * support.repeat(batch_size, 1)
             if Tz.shape != torch.Size([batch_size, atoms]):
                 raise RuntimeError(
                     "Tz shape must be torch.Size([batch_size, atoms]), "
