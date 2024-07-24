@@ -65,7 +65,6 @@ class ClearMLLogger(Logger):
                 project_name=self._clearml_kwargs["project_name"],
                 task_name=self._clearml_kwargs["task_name"],
                 tags=self._clearml_kwargs["tags"])
-        print(self.task)
         return self.task
 
     def log_scalar(self, name: str, value: float, step: Optional[int] = None,
