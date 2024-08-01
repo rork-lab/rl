@@ -101,14 +101,14 @@ class CQLLoss(LossModule):
         >>> import torch
         >>> from torch import nn
         >>> from torchrl.data import BoundedTensorSpec
-        >>> from torchrl.modules.distributions.continuous import NormalParamWrapper, TanhNormal
+        >>> from torchrl.modules.distributions import NormalParamExtractor, TanhNormal
         >>> from torchrl.modules.tensordict_module.actors import ProbabilisticActor, ValueOperator
         >>> from torchrl.modules.tensordict_module.common import SafeModule
         >>> from torchrl.objectives.cql import CQLLoss
         >>> from tensordict import TensorDict
         >>> n_act, n_obs = 4, 3
         >>> spec = BoundedTensorSpec(-torch.ones(n_act), torch.ones(n_act), (n_act,))
-        >>> net = NormalParamWrapper(nn.Linear(n_obs, 2 * n_act))
+        >>> net = nn.Sequential(nn.Linear(n_obs, 2 * n_act), NormalParamExtractor())
         >>> module = SafeModule(net, in_keys=["observation"], out_keys=["loc", "scale"])
         >>> actor = ProbabilisticActor(
         ...     module=module,
@@ -161,14 +161,14 @@ class CQLLoss(LossModule):
         >>> import torch
         >>> from torch import nn
         >>> from torchrl.data import BoundedTensorSpec
-        >>> from torchrl.modules.distributions.continuous import NormalParamWrapper, TanhNormal
+        >>> from torchrl.modules.distributions import NormalParamExtractor, TanhNormal
         >>> from torchrl.modules.tensordict_module.actors import ProbabilisticActor, ValueOperator
         >>> from torchrl.modules.tensordict_module.common import SafeModule
         >>> from torchrl.objectives.cql import CQLLoss
         >>> _ = torch.manual_seed(42)
         >>> n_act, n_obs = 4, 3
         >>> spec = BoundedTensorSpec(-torch.ones(n_act), torch.ones(n_act), (n_act,))
-        >>> net = NormalParamWrapper(nn.Linear(n_obs, 2 * n_act))
+        >>> net = nn.Sequential(nn.Linear(n_obs, 2 * n_act), NormalParamExtractor())
         >>> module = SafeModule(net, in_keys=["observation"], out_keys=["loc", "scale"])
         >>> actor = ProbabilisticActor(
         ...     module=module,
@@ -373,14 +373,16 @@ class CQLLoss(LossModule):
                 "log_alpha_prime",
                 torch.nn.Parameter(torch.tensor(math.log(1.0), device=device)),
             )
+        self._make_vmap()
+        self.reduction = reduction
 
+    def _make_vmap(self):
         self._vmap_qvalue_networkN0 = _vmap_func(
             self.qvalue_network, (None, 0), randomness=self.vmap_randomness
         )
         self._vmap_qvalue_network00 = _vmap_func(
             self.qvalue_network, randomness=self.vmap_randomness
         )
-        self.reduction = reduction
 
     @property
     def target_entropy(self):

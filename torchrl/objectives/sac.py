@@ -118,14 +118,14 @@ class SACLoss(LossModule):
         >>> import torch
         >>> from torch import nn
         >>> from torchrl.data import BoundedTensorSpec
-        >>> from torchrl.modules.distributions.continuous import NormalParamWrapper, TanhNormal
+        >>> from torchrl.modules.distributions import NormalParamExtractor, TanhNormal
         >>> from torchrl.modules.tensordict_module.actors import ProbabilisticActor, ValueOperator
         >>> from torchrl.modules.tensordict_module.common import SafeModule
         >>> from torchrl.objectives.sac import SACLoss
         >>> from tensordict import TensorDict
         >>> n_act, n_obs = 4, 3
         >>> spec = BoundedTensorSpec(-torch.ones(n_act), torch.ones(n_act), (n_act,))
-        >>> net = NormalParamWrapper(nn.Linear(n_obs, 2 * n_act))
+        >>> net = nn.Sequential(nn.Linear(n_obs, 2 * n_act), NormalParamExtractor())
         >>> module = SafeModule(net, in_keys=["observation"], out_keys=["loc", "scale"])
         >>> actor = ProbabilisticActor(
         ...     module=module,
@@ -181,14 +181,14 @@ class SACLoss(LossModule):
         >>> import torch
         >>> from torch import nn
         >>> from torchrl.data import BoundedTensorSpec
-        >>> from torchrl.modules.distributions.continuous import NormalParamWrapper, TanhNormal
+        >>> from torchrl.modules.distributions import NormalParamExtractor, TanhNormal
         >>> from torchrl.modules.tensordict_module.actors import ProbabilisticActor, ValueOperator
         >>> from torchrl.modules.tensordict_module.common import SafeModule
         >>> from torchrl.objectives.sac import SACLoss
         >>> _ = torch.manual_seed(42)
         >>> n_act, n_obs = 4, 3
         >>> spec = BoundedTensorSpec(-torch.ones(n_act), torch.ones(n_act), (n_act,))
-        >>> net = NormalParamWrapper(nn.Linear(n_obs, 2 * n_act))
+        >>> net = nn.Sequential(nn.Linear(n_obs, 2 * n_act), NormalParamExtractor())
         >>> module = SafeModule(net, in_keys=["observation"], out_keys=["loc", "scale"])
         >>> actor = ProbabilisticActor(
         ...     module=module,
@@ -403,14 +403,17 @@ class SACLoss(LossModule):
             )
         if gamma is not None:
             raise TypeError(_GAMMA_LMBDA_DEPREC_ERROR)
+        self._make_vmap()
+        self.reduction = reduction
+
+    def _make_vmap(self):
         self._vmap_qnetworkN0 = _vmap_func(
             self.qvalue_network, (None, 0), randomness=self.vmap_randomness
         )
         if self._version == 1:
             self._vmap_qnetwork00 = _vmap_func(
-                qvalue_network, randomness=self.vmap_randomness
+                self.qvalue_network, randomness=self.vmap_randomness
             )
-        self.reduction = reduction
 
     @property
     def target_entropy_buffer(self):
@@ -850,8 +853,7 @@ class DiscreteSACLoss(LossModule):
     >>> import torch
     >>> from torch import nn
     >>> from torchrl.data.tensor_specs import OneHotDiscreteTensorSpec
-    >>> from torchrl.modules.distributions.continuous import NormalParamWrapper
-    >>> from torchrl.modules.distributions.discrete import OneHotCategorical
+    >>> from torchrl.modules.distributions import NormalParamExtractor, OneHotCategorical
     >>> from torchrl.modules.tensordict_module.actors import ProbabilisticActor, ValueOperator
     >>> from torchrl.modules.tensordict_module.common import SafeModule
     >>> from torchrl.objectives.sac import DiscreteSACLoss
@@ -908,14 +910,13 @@ class DiscreteSACLoss(LossModule):
         >>> import torch
         >>> from torch import nn
         >>> from torchrl.data.tensor_specs import OneHotDiscreteTensorSpec
-        >>> from torchrl.modules.distributions.continuous import NormalParamWrapper
-        >>> from torchrl.modules.distributions.discrete import OneHotCategorical
+        >>> from torchrl.modules.distributions import NormalParamExtractor, OneHotCategorical
         >>> from torchrl.modules.tensordict_module.actors import ProbabilisticActor, ValueOperator
         >>> from torchrl.modules.tensordict_module.common import SafeModule
         >>> from torchrl.objectives.sac import DiscreteSACLoss
         >>> n_act, n_obs = 4, 3
         >>> spec = OneHotDiscreteTensorSpec(n_act)
-        >>> net = NormalParamWrapper(nn.Linear(n_obs, 2 * n_act))
+        >>> net = nn.Sequential(nn.Linear(n_obs, 2 * n_act), NormalParamExtractor())
         >>> module = SafeModule(net, in_keys=["observation"], out_keys=["logits"])
         >>> actor = ProbabilisticActor(
         ...     module=module,
@@ -1101,10 +1102,13 @@ class DiscreteSACLoss(LossModule):
         self.register_buffer(
             "target_entropy", torch.tensor(target_entropy, device=device)
         )
+        self._make_vmap()
+        self.reduction = reduction
+
+    def _make_vmap(self):
         self._vmap_qnetworkN0 = _vmap_func(
             self.qvalue_network, (None, 0), randomness=self.vmap_randomness
         )
-        self.reduction = reduction
 
     def _forward_value_estimator_keys(self, **kwargs) -> None:
         if self._value_estimator is not None:

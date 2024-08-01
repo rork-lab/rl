@@ -12,7 +12,6 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Iterator, List, Optional, Tuple
 
-import torch
 from tensordict import is_tensor_collection, TensorDict, TensorDictBase
 
 from tensordict.nn import TensorDictModule, TensorDictModuleBase, TensorDictParams
@@ -540,17 +539,34 @@ class LossModule(TensorDictModuleBase, metaclass=_LossMeta):
 
     @property
     def vmap_randomness(self):
+        """Vmap random mode.
+
+        The vmap randomness mode controls what :func:`~torch.vmap` should do when dealing with
+        functions with a random outcome such as :func:`~torch.randn` and :func:`~torch.rand`.
+        If `"error"`, any random function will raise an exception indicating that `vmap` does not
+        know how to handle the random call.
+
+        If `"different"`, every element of the batch along which vmap is being called will
+        behave differently. If `"same"`, vmaps will copy the same result across all elements.
+
+        ``vmap_randomness`` defaults to `"error"` if no random module is detected, and to `"different"` in
+        other cases. By default, only a limited number of modules are listed as random, but the list can be extended
+        using the :func:`~torchrl.objectives.common.add_random_module` function.
+
+        This property supports setting its value.
+
+        """
         if self._vmap_randomness is None:
-            do_break = False
-            for val in self.__dict__.values():
-                if isinstance(val, torch.nn.Module):
-                    for module in val.modules():
-                        if isinstance(module, RANDOM_MODULE_LIST):
-                            self._vmap_randomness = "different"
-                            do_break = True
-                            break
-                if do_break:
-                    # double break
+            main_modules = list(self.__dict__.values()) + list(self.children())
+            modules = (
+                module
+                for main_module in main_modules
+                if isinstance(main_module, nn.Module)
+                for module in main_module.modules()
+            )
+            for val in modules:
+                if isinstance(val, RANDOM_MODULE_LIST):
+                    self._vmap_randomness = "different"
                     break
             else:
                 self._vmap_randomness = "error"
@@ -558,7 +574,12 @@ class LossModule(TensorDictModuleBase, metaclass=_LossMeta):
         return self._vmap_randomness
 
     def set_vmap_randomness(self, value):
+        if value not in ("error", "same", "different"):
+            raise ValueError(
+                "Wrong vmap randomness, should be one of 'error', 'same' or 'different'."
+            )
         self._vmap_randomness = value
+        self._make_vmap()
 
     @staticmethod
     def _make_meta_params(param):
@@ -569,6 +590,12 @@ class LossModule(TensorDictModuleBase, metaclass=_LossMeta):
         if is_param:
             pd = nn.Parameter(pd, requires_grad=False)
         return pd
+
+    def _make_vmap(self):
+        """Caches the the vmap callers to reduce the overhead at runtime."""
+        raise NotImplementedError(
+            f"_make_vmap has been called but is not implemented for loss of type {type(self).__name__}."
+        )
 
 
 class _make_target_param:
@@ -581,3 +608,9 @@ class _make_target_param:
                 x.data.clone() if self.clone else x.data, requires_grad=False
             )
         return x.data.clone() if self.clone else x.data
+
+
+def add_ramdom_module(module):
+    """Adds a random module to the list of modules that will be detected by :meth:`~torchrl.objectives.LossModule.vmap_randomness` as random."""
+    global RANDOM_MODULE_LIST
+    RANDOM_MODULE_LIST = RANDOM_MODULE_LIST + (module,)
