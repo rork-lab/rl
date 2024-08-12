@@ -96,14 +96,14 @@ class A2CLoss(LossModule):
     Examples:
         >>> import torch
         >>> from torch import nn
-        >>> from torchrl.data import BoundedTensorSpec
+        >>> from torchrl.data import Bounded
         >>> from torchrl.modules.distributions import NormalParamExtractor, TanhNormal
         >>> from torchrl.modules.tensordict_module.actors import ProbabilisticActor, ValueOperator
         >>> from torchrl.modules.tensordict_module.common import SafeModule
         >>> from torchrl.objectives.a2c import A2CLoss
         >>> from tensordict import TensorDict
         >>> n_act, n_obs = 4, 3
-        >>> spec = BoundedTensorSpec(-torch.ones(n_act), torch.ones(n_act), (n_act,))
+        >>> spec = Bounded(-torch.ones(n_act), torch.ones(n_act), (n_act,))
         >>> net = nn.Sequential(nn.Linear(n_obs, 2 * n_act), NormalParamExtractor())
         >>> module = SafeModule(net, in_keys=["observation"], out_keys=["loc", "scale"])
         >>> actor = ProbabilisticActor(
@@ -147,14 +147,14 @@ class A2CLoss(LossModule):
     Examples:
         >>> import torch
         >>> from torch import nn
-        >>> from torchrl.data import BoundedTensorSpec
+        >>> from torchrl.data import Bounded
         >>> from torchrl.modules.distributions import NormalParamExtractor, TanhNormal
         >>> from torchrl.modules.tensordict_module.actors import ProbabilisticActor, ValueOperator
         >>> from torchrl.modules.tensordict_module.common import SafeModule
         >>> from torchrl.objectives.a2c import A2CLoss
         >>> _ = torch.manual_seed(42)
         >>> n_act, n_obs = 4, 3
-        >>> spec = BoundedTensorSpec(-torch.ones(n_act), torch.ones(n_act), (n_act,))
+        >>> spec = Bounded(-torch.ones(n_act), torch.ones(n_act), (n_act,))
         >>> net = nn.Sequential(nn.Linear(n_obs, 2 * n_act), NormalParamExtractor())
         >>> module = SafeModule(net, in_keys=["observation"], out_keys=["loc", "scale"])
         >>> actor = ProbabilisticActor(
@@ -408,34 +408,23 @@ class A2CLoss(LossModule):
 
     def loss_critic(self, tensordict: TensorDictBase) -> torch.Tensor:
         if self.clip_value:
-            try:
-                old_state_value = tensordict.get(self.tensor_keys.value).clone()
-            except KeyError:
+            old_state_value = tensordict.get(
+                self.tensor_keys.value, None
+            )  # TODO: None soon to be removed
+            if old_state_value is None:
                 raise KeyError(
                     f"clip_value is set to {self.clip_value}, but "
                     f"the key {self.tensor_keys.value} was not found in the input tensordict. "
                     f"Make sure that the value_key passed to A2C exists in the input tensordict."
                 )
+            old_state_value = old_state_value.clone()
 
-        try:
-            # TODO: if the advantage is gathered by forward, this introduces an
-            # overhead that we could easily reduce.
-            target_return = tensordict.get(self.tensor_keys.value_target)
-            tensordict_select = tensordict.select(
-                *self.critic_network.in_keys, strict=False
-            )
-            with self.critic_network_params.to_module(
-                self.critic_network
-            ) if self.functional else contextlib.nullcontext():
-                state_value = self.critic_network(
-                    tensordict_select,
-                ).get(self.tensor_keys.value)
-            loss_value = distance_loss(
-                target_return,
-                state_value,
-                loss_function=self.loss_critic_type,
-            )
-        except KeyError:
+        # TODO: if the advantage is gathered by forward, this introduces an
+        # overhead that we could easily reduce.
+        target_return = tensordict.get(
+            self.tensor_keys.value_target, None
+        )  # TODO: None soon to be removed
+        if target_return is None:
             raise KeyError(
                 f"the key {self.tensor_keys.value_target} was not found in the input tensordict. "
                 f"Make sure you provided the right key and the value_target (i.e. the target "
@@ -443,6 +432,20 @@ class A2CLoss(LossModule):
                 f"TDLambdaEstimate and TDEstimate all return a 'value_target' entry that "
                 f"can be used for the value loss."
             )
+        tensordict_select = tensordict.select(
+            *self.critic_network.in_keys, strict=False
+        )
+        with self.critic_network_params.to_module(
+            self.critic_network
+        ) if self.functional else contextlib.nullcontext():
+            state_value = self.critic_network(
+                tensordict_select,
+            ).get(self.tensor_keys.value)
+        loss_value = distance_loss(
+            target_return,
+            state_value,
+            loss_function=self.loss_critic_type,
+        )
         clip_fraction = None
         if self.clip_value:
             loss_value, clip_fraction = _clip_value_loss(

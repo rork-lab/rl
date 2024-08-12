@@ -16,7 +16,7 @@ from tensordict.utils import expand_as_right, prod, set_lazy_legacy
 from torch import nn, Tensor
 from torch.nn.modules.rnn import RNNCellBase
 
-from torchrl.data.tensor_specs import UnboundedContinuousTensorSpec
+from torchrl.data.tensor_specs import Unbounded
 from torchrl.objectives.value.functional import (
     _inv_pad_sequence,
     _split_and_pad_sequence,
@@ -581,12 +581,8 @@ class LSTMModule(ModuleBase):
             )
         return TensorDictPrimer(
             {
-                in_key1: UnboundedContinuousTensorSpec(
-                    shape=(self.lstm.num_layers, self.lstm.hidden_size)
-                ),
-                in_key2: UnboundedContinuousTensorSpec(
-                    shape=(self.lstm.num_layers, self.lstm.hidden_size)
-                ),
+                in_key1: Unbounded(shape=(self.lstm.num_layers, self.lstm.hidden_size)),
+                in_key2: Unbounded(shape=(self.lstm.num_layers, self.lstm.hidden_size)),
             }
         )
 
@@ -665,7 +661,7 @@ class LSTMModule(ModuleBase):
         else:
             tensordict_shaped = tensordict.reshape(-1).unsqueeze(-1)
 
-        is_init = tensordict_shaped.get("is_init").squeeze(-1)
+        is_init = tensordict_shaped["is_init"].squeeze(-1)
         splits = None
         if self.recurrent_mode and is_init[..., 1:].any():
             # if we have consecutive trajectories, things get a little more complicated
@@ -679,7 +675,7 @@ class LSTMModule(ModuleBase):
             tensordict_shaped = _split_and_pad_sequence(
                 tensordict_shaped.select(*self.in_keys, strict=False), splits
             )
-            is_init = tensordict_shaped.get("is_init").squeeze(-1)
+            is_init = tensordict_shaped["is_init"].squeeze(-1)
 
         value, hidden0, hidden1 = (
             tensordict_shaped.get(key, default)
@@ -691,7 +687,7 @@ class LSTMModule(ModuleBase):
         # packed sequences do not help to get the accurate last hidden values
         # if splits is not None:
         #     value = torch.nn.utils.rnn.pack_padded_sequence(value, splits, batch_first=True)
-        if is_init.any() and hidden0 is not None:
+        if hidden0 is not None:
             is_init_expand = expand_as_right(is_init, hidden0)
             hidden0 = torch.where(is_init_expand, 0, hidden0)
             hidden1 = torch.where(is_init_expand, 0, hidden1)
@@ -1329,9 +1325,7 @@ class GRUModule(ModuleBase):
             )
         return TensorDictPrimer(
             {
-                in_key1: UnboundedContinuousTensorSpec(
-                    shape=(self.gru.num_layers, self.gru.hidden_size)
-                ),
+                in_key1: Unbounded(shape=(self.gru.num_layers, self.gru.hidden_size)),
             }
         )
 
@@ -1410,7 +1404,7 @@ class GRUModule(ModuleBase):
         else:
             tensordict_shaped = tensordict.reshape(-1).unsqueeze(-1)
 
-        is_init = tensordict_shaped.get("is_init").squeeze(-1)
+        is_init = tensordict_shaped["is_init"].squeeze(-1)
         splits = None
         if self.recurrent_mode and is_init[..., 1:].any():
             # if we have consecutive trajectories, things get a little more complicated
@@ -1424,7 +1418,7 @@ class GRUModule(ModuleBase):
             tensordict_shaped = _split_and_pad_sequence(
                 tensordict_shaped.select(*self.in_keys, strict=False), splits
             )
-            is_init = tensordict_shaped.get("is_init").squeeze(-1)
+            is_init = tensordict_shaped["is_init"].squeeze(-1)
 
         value, hidden = (
             tensordict_shaped.get(key, default)

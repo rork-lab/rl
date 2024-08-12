@@ -151,14 +151,14 @@ class PPOLoss(LossModule):
     Examples:
         >>> import torch
         >>> from torch import nn
-        >>> from torchrl.data.tensor_specs import BoundedTensorSpec
+        >>> from torchrl.data.tensor_specs import Bounded
         >>> from torchrl.modules.distributions import NormalParamExtractor, TanhNormal
         >>> from torchrl.modules.tensordict_module.actors import ProbabilisticActor, ValueOperator
         >>> from torchrl.modules.tensordict_module.common import SafeModule
         >>> from torchrl.objectives.ppo import PPOLoss
         >>> from tensordict import TensorDict
         >>> n_act, n_obs = 4, 3
-        >>> spec = BoundedTensorSpec(-torch.ones(n_act), torch.ones(n_act), (n_act,))
+        >>> spec = Bounded(-torch.ones(n_act), torch.ones(n_act), (n_act,))
         >>> base_layer = nn.Linear(n_obs, 5)
         >>> net = nn.Sequential(base_layer, nn.Linear(5, 2 * n_act), NormalParamExtractor())
         >>> module = SafeModule(net, in_keys=["observation"], out_keys=["loc", "scale"])
@@ -204,13 +204,13 @@ class PPOLoss(LossModule):
     Examples:
         >>> import torch
         >>> from torch import nn
-        >>> from torchrl.data.tensor_specs import BoundedTensorSpec
+        >>> from torchrl.data.tensor_specs import Bounded
         >>> from torchrl.modules.distributions import NormalParamExtractor, TanhNormal
         >>> from torchrl.modules.tensordict_module.actors import ProbabilisticActor, ValueOperator
         >>> from torchrl.modules.tensordict_module.common import SafeModule
         >>> from torchrl.objectives.ppo import PPOLoss
         >>> n_act, n_obs = 4, 3
-        >>> spec = BoundedTensorSpec(-torch.ones(n_act), torch.ones(n_act), (n_act,))
+        >>> spec = Bounded(-torch.ones(n_act), torch.ones(n_act), (n_act,))
         >>> base_layer = nn.Linear(n_obs, 5)
         >>> net = nn.Sequential(base_layer, nn.Linear(5, 2 * n_act), NormalParamExtractor())
         >>> module = SafeModule(net, in_keys=["observation"], out_keys=["loc", "scale"])
@@ -482,9 +482,10 @@ class PPOLoss(LossModule):
         # overhead that we could easily reduce.
         if self.separate_losses:
             tensordict = tensordict.detach()
-        try:
-            target_return = tensordict.get(self.tensor_keys.value_target)
-        except KeyError:
+        target_return = tensordict.get(
+            self.tensor_keys.value_target, None
+        )  # TODO: None soon to be removed
+        if target_return is None:
             raise KeyError(
                 f"the key {self.tensor_keys.value_target} was not found in the input tensordict. "
                 f"Make sure you provided the right key and the value_target (i.e. the target "
@@ -494,9 +495,10 @@ class PPOLoss(LossModule):
             )
 
         if self.clip_value:
-            try:
-                old_state_value = tensordict.get(self.tensor_keys.value)
-            except KeyError:
+            old_state_value = tensordict.get(
+                self.tensor_keys.value, None
+            )  # TODO: None soon to be removed
+            if old_state_value is None:
                 raise KeyError(
                     f"clip_value is set to {self.clip_value}, but "
                     f"the key {self.tensor_keys.value} was not found in the input tensordict. "
@@ -508,9 +510,10 @@ class PPOLoss(LossModule):
         ) if self.functional else contextlib.nullcontext():
             state_value_td = self.critic_network(tensordict)
 
-        try:
-            state_value = state_value_td.get(self.tensor_keys.value)
-        except KeyError:
+        state_value = state_value_td.get(
+            self.tensor_keys.value, None
+        )  # TODO: None soon to be removed
+        if state_value is None:
             raise KeyError(
                 f"the key {self.tensor_keys.value} was not found in the critic output tensordict. "
                 f"Make sure that the value_key passed to PPO is accurate."

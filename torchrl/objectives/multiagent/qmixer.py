@@ -63,9 +63,9 @@ class QMixerLoss(LossModule):
             create a double DQN. Default is ``False``.
         action_space (str or TensorSpec, optional): Action space. Must be one of
             ``"one-hot"``, ``"mult_one_hot"``, ``"binary"`` or ``"categorical"``,
-            or an instance of the corresponding specs (:class:`torchrl.data.OneHotDiscreteTensorSpec`,
-            :class:`torchrl.data.MultiOneHotDiscreteTensorSpec`,
-            :class:`torchrl.data.BinaryDiscreteTensorSpec` or :class:`torchrl.data.DiscreteTensorSpec`).
+            or an instance of the corresponding specs (:class:`torchrl.data.OneHot`,
+            :class:`torchrl.data.MultiOneHot`,
+            :class:`torchrl.data.Binary` or :class:`torchrl.data.Categorical`).
             If not provided, an attempt to retrieve it from the value network
             will be made.
         priority_key (NestedKey, optional): [Deprecated, use .set_keys(priority_key=priority_key) instead]
@@ -355,7 +355,7 @@ class QMixerLoss(LossModule):
         td_copy.set(self.tensor_keys.local_value, pred_val_index)  # [*B, n_agents, 1]
         with self.mixer_network_params.to_module(self.mixer_network):
             self.mixer_network(td_copy)
-        pred_val_index = td_copy.get(self.tensor_keys.global_value).squeeze(-1)
+        pred_val_index = td_copy[self.tensor_keys.global_value].squeeze(-1)
         # [*B] this is global and shared among the agents as will be the target
 
         target_value = self.value_estimator.value_estimate(

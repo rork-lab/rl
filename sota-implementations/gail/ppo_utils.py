@@ -3,12 +3,11 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import numpy as np
 import torch.nn
 import torch.optim
 
 from tensordict.nn import AddStateIndependentNormalScale, TensorDictModule
-from torchrl.data import Composite
+from torchrl.data import CompositeSpec
 from torchrl.envs import (
     ClipTransform,
     DoubleToFloat,
@@ -28,17 +27,13 @@ from torchrl.record import VideoRecorder
 # --------------------------------------------------------------------
 
 
-def make_env(
-    env_name="HalfCheetah-v4", device="cpu", from_pixels=False, pixels_only=False
-):
-    env = GymEnv(
-        env_name, device=device, from_pixels=from_pixels, pixels_only=pixels_only
-    )
+def make_env(env_name="HalfCheetah-v4", device="cpu", from_pixels: bool = False):
+    env = GymEnv(env_name, device=device, from_pixels=from_pixels, pixels_only=False)
     env = TransformedEnv(env)
+    env.append_transform(VecNorm(in_keys=["observation"], decay=0.99999, eps=1e-2))
+    env.append_transform(ClipTransform(in_keys=["observation"], low=-10, high=10))
     env.append_transform(RewardSum())
     env.append_transform(StepCounter())
-    env.append_transform(VecNorm(in_keys=["observation"]))
-    env.append_transform(ClipTransform(in_keys=["observation"], low=-10, high=10))
     env.append_transform(DoubleToFloat(in_keys=["observation"]))
     return env
 
@@ -79,7 +74,9 @@ def make_ppo_models_state(proof_environment):
     # Add state-independent normal scale
     policy_mlp = torch.nn.Sequential(
         policy_mlp,
-        AddStateIndependentNormalScale(proof_environment.action_spec.shape[-1]),
+        AddStateIndependentNormalScale(
+            proof_environment.action_spec.shape[-1], scale_lb=1e-8
+        ),
     )
 
     # Add probabilistic sampling of the actions
@@ -90,7 +87,7 @@ def make_ppo_models_state(proof_environment):
             out_keys=["loc", "scale"],
         ),
         in_keys=["loc", "scale"],
-        spec=Composite(action=proof_environment.action_spec),
+        spec=CompositeSpec(action=proof_environment.action_spec),
         distribution_class=distribution_class,
         distribution_kwargs=distribution_kwargs,
         return_log_prob=True,
@@ -147,7 +144,7 @@ def eval_model(actor, test_env, num_episodes=3):
             max_steps=10_000_000,
         )
         reward = td_test["next", "episode_reward"][td_test["next", "done"]]
-        test_rewards = np.append(test_rewards, reward.cpu().numpy())
+        test_rewards.append(reward.cpu())
         test_env.apply(dump_video)
     del td_test
-    return test_rewards.mean()
+    return torch.cat(test_rewards, 0).mean()

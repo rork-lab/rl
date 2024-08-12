@@ -10,7 +10,7 @@ import torch
 import torchrl.objectives.common
 from tensordict import TensorDictBase
 from tensordict.utils import expand_as_right, NestedKey
-from torchrl.data.tensor_specs import UnboundedDiscreteTensorSpec
+from torchrl.data.tensor_specs import Unbounded
 
 from torchrl.envs.transforms.transforms import FORWARD_NOT_IMPLEMENTED, Transform
 
@@ -150,9 +150,8 @@ class EndOfLifeTransform(Transform):
         end_of_life = torch.as_tensor(
             tensordict.get(self.lives_key) > lives, device=self.parent.device
         )
-        try:
-            done = next_tensordict.get(self.done_key)
-        except KeyError:
+        done = next_tensordict.get(self.done_key, None)  # TODO: None soon to be removed
+        if done is None:
             raise KeyError(
                 f"The done value pointed by {self.done_key} cannot be found in tensordict with keys {tensordict.keys(True, True)}. "
                 f"Make sure to pass the appropriate done_key to the {type(self)} transform."
@@ -180,7 +179,7 @@ class EndOfLifeTransform(Transform):
     def transform_observation_spec(self, observation_spec):
         full_done_spec = self.parent.output_spec["full_done_spec"]
         observation_spec[self.eol_key] = full_done_spec[self.done_key].clone()
-        observation_spec[self.lives_key] = UnboundedDiscreteTensorSpec(
+        observation_spec[self.lives_key] = Unbounded(
             self.parent.batch_size,
             device=self.parent.device,
             dtype=torch.int64,
